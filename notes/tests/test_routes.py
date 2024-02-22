@@ -14,15 +14,14 @@ class TestRoutes(TestCase):
     @classmethod
     def setUpTestData(cls):
         # Создаём двух пользователей с разными именами:
-        cls.author = User.objects.create(username='Лев Толстой')
-        cls.reader = User.objects.create(username='Читатель простой')
+        cls.author = User.objects.create(username='Созидатель')
+        cls.reader = User.objects.create(username='Потребитель')
         # Создаём заметку:
-        cls.note = Note.objects.create(text='Текст заметки', author=cls.author)
+        cls.note = Note.objects.create(text='Текст заметки', author=cls.author, slug='some_note')
 
     def test_pages_availability(self):
         urls = (
             ('notes:home', None),
-            ('notes:detail', (self.note.id,)),
             ('users:login', None),
             ('users:logout', None),
             ('users:signup', None),
@@ -33,14 +32,30 @@ class TestRoutes(TestCase):
                 response = self.client.get(url)
                 self.assertEqual(response.status_code, HTTPStatus.OK)
 
+    def test_availability_for_comment_edit_and_delete(self):
+        users_statuses = (
+            (self.author, HTTPStatus.OK),
+            (self.reader, HTTPStatus.NOT_FOUND),
+        )
+        for user, status in users_statuses:
+            # Логиним пользователя в клиенте:
+            self.client.force_login(user)
+            # Для каждой пары "пользователь - ожидаемый ответ"
+            # перебираем имена тестируемых страниц:
+            for name in ('notes:edit', 'notes:detail', 'notes:delete'):
+                with self.subTest(user=user, name=name):
+                    url = reverse(name, args=(self.note.slug,))
+                    response = self.client.get(url)
+                    self.assertEqual(response.status_code, status)
+
     def test_redirect_for_anonymous_client(self):
         # Сохраняем адрес страницы логина:
         login_url = reverse('users:login')
         # В цикле перебираем имена страниц, с которых ожидаем редирект:
-        for name in ('notes:edit', 'notes:delete'):
+        for name in ('notes:edit', 'notes:detail', 'notes:delete'):
             with self.subTest(name=name):
                 # Получаем адрес страницы редактирования или удаления заметки:
-                url = reverse(name, args=(self.note.id,))
+                url = reverse(name, args=(self.note.slug,))
                 # Получаем ожидаемый адрес страницы логина,
                 # на который будет перенаправлен пользователь.
                 # Учитываем, что в адресе будет параметр next, в котором передаётся
