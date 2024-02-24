@@ -115,6 +115,8 @@ class TestNoteEditDelete(TestCase):
         cls.edit_url = reverse('notes:edit', args=(cls.NOTE_SLUG,))
         # URL для удаления заметки.
         cls.delete_url = reverse('notes:delete', args=(cls.NOTE_SLUG,))
+        # URL успешного выполнения действия
+        cls.url_to_success = reverse('notes:success')
         # Формируем данные для POST-запроса по обновлению заметки.
         cls.form_data = {'text': cls.NEW_NOTE_TEXT}
 
@@ -127,11 +129,38 @@ class TestNoteEditDelete(TestCase):
         notes_count = Note.objects.count()
         self.assertEqual(notes_count, 1)
 
+    def test_author_can_delete_his_note(self):
+        # Выполняем запрос на удаление от пользователя-автора.
+        response = self.author_client.delete(self.delete_url)
+        # Проверяем, что произошло перенаправление
+        # на страницу успешного выполнения.
+        self.assertEqual(response.status_code, HTTPStatus.FOUND)
+        # Проверяем, что редирект приведёт на страницу успешного выполнения.
+        self.assertRedirects(response, self.url_to_success)
+        # Убедимся, что заметка удалена.
+        notes_count = Note.objects.count()
+        self.assertEqual(notes_count, 0)
+
+    def test_author_can_edit_note(self):
+        # Выполняем запрос на редактирование от имени автора заметки.
+        response = self.author_client.post(self.edit_url, data={
+            'title': self.NOTE_TITLE,
+            'text': self.NEW_NOTE_TEXT,
+            'slug': self.NOTE_SLUG,
+        })
+        # Проверяем, что произошло перенаправление
+        # на страницу успешного выполнения.
+        self.assertEqual(response.status_code, HTTPStatus.FOUND)
+        # Проверяем, что редирект приведёт на страницу успешного выполнения.
+        self.assertRedirects(response, self.url_to_success)
+        # Обновляем объект заметки.
+        self.note.refresh_from_db()
+        # Проверяем, что текст заметки соответствует обновленному.
+        self.assertEqual(self.note.text, self.NEW_NOTE_TEXT)
+
     def test_user_cant_edit_note_of_another_user(self):
         # Выполняем запрос на удаление от пользователя-читателя.
-        response = self.reader_client.post(
-            self.edit_url, data={'text': self.NEW_NOTE_TEXT}
-        )
+        response = self.reader_client.post(self.edit_url, data=self.form_data)
         # Проверяем, что вернулась 404 ошибка.
         self.assertEqual(response.status_code, HTTPStatus.NOT_FOUND)
         # Обновляем объект заметки.
